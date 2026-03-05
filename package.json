@@ -1,0 +1,67 @@
+{
+  "name": "project-settings",
+  "displayName": "Project Settings",
+  "publisher": "lucasols",
+  "version": "0.1.0",
+  "description": "Sync committable project settings to .vscode/settings.json",
+  "main": "./dist/main.mjs",
+  "repository": "lucasols/vscode-project-settings",
+  "scripts": {
+    "lint": "pnpm tsc && pnpm eslint",
+    "tsc": "tsc -p tsconfig.prod.json",
+    "build": "pnpm lint && pnpm test && pnpm build:no-test",
+    "build:no-test": "tsup --minify --dts && vsce package --no-dependencies",
+    "dev": "tsup --watch --minify --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "install-extension": "code --install-extension $(ls -t project-settings-*.vsix | head -n 1)"
+  },
+  "keywords": [
+    "settings",
+    "project-settings",
+    "sync"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
+  },
+  "devDependencies": {
+    "@ls-stack/extended-lint": "^0.14.2",
+    "@types/node": "^22.9.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.13.0",
+    "@typescript-eslint/parser": "^8.13.0",
+    "@vscode/vsce": "^3.2.1",
+    "eslint": "^9.14.0",
+    "eslint-plugin-unicorn": "^56.0.0",
+    "eslint-plugin-vitest": "^0.5.4",
+    "prettier": "^3.3.3",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0",
+    "vitest": "^2.1.0",
+    "jest-mock-vscode": "^4.0.0"
+  },
+  "engines": {
+    "vscode": ">=1.90.0",
+    "node": ">=18.0.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "projectSettings.createProjectSettings",
+        "title": "Create project-settings.json",
+        "category": "Project Settings"
+      },
+      {
+        "command": "projectSettings.syncNow",
+        "title": "Sync Now",
+        "category": "Project Settings"
+      }
+    ]
+  }
+}
