@@ -10,14 +10,22 @@ let syncModulePromise: Promise<SyncModule> | undefined
 let createProjectSettingsModulePromise:
   | Promise<CreateProjectSettingsModule>
   | undefined
+let outputChannel: vscode.OutputChannel | undefined
 
 export function activate(context: vscode.ExtensionContext) {
+  outputChannel = vscode.window.createOutputChannel('Project Settings')
   const watcherManager = createWatcherManager()
   const initialSyncTimeout = setTimeout(() => {
+    log('Running initial sync')
     void syncAllWorkspaceFolders()
   }, 0)
 
+  log(
+    `Activated with ${vscode.workspace.workspaceFolders?.length ?? 0} workspace folder(s)`,
+  )
+
   context.subscriptions.push(
+    outputChannel,
     watcherManager,
     {
       dispose() {
@@ -26,27 +34,42 @@ export function activate(context: vscode.ExtensionContext) {
     },
     vscode.workspace.onDidChangeWorkspaceFolders((event) => {
       watcherManager.refresh()
+      log(
+        `Workspace folders changed: +${event.added.length} / -${event.removed.length}`,
+      )
 
       for (const folder of event.added) {
+        log(`Syncing added workspace folder: ${folder.uri.fsPath}`)
         void syncWorkspaceFolder(folder.uri)
       }
     }),
     vscode.commands.registerCommand(
       'projectSettings.createProjectSettings',
       async () => {
+        log('Running createProjectSettings command')
         const { createProjectSettings } = await loadCreateProjectSettingsModule()
         await createProjectSettings()
       },
     ),
-    vscode.commands.registerCommand('projectSettings.syncNow', syncAllWorkspaceFolders),
+    vscode.commands.registerCommand('projectSettings.syncNow', async () => {
+      log('Running syncNow command')
+      await syncAllWorkspaceFolders()
+    }),
   )
 }
 
-export function deactivate() {}
+export function deactivate() {
+  log('Deactivated')
+}
 
 async function syncAllWorkspaceFolders() {
   const folders = vscode.workspace.workspaceFolders
-  if (!folders) return
+  if (!folders) {
+    log('No workspace folders to sync')
+    return
+  }
+
+  log(`Syncing ${folders.length} workspace folder(s)`)
 
   await Promise.all(folders.map((folder) => syncWorkspaceFolder(folder.uri)))
 }
@@ -77,8 +100,11 @@ async function syncWorkspaceFolder(folderUri: vscode.Uri) {
 
   const projectSettingsContent = await readTextFile(projectSettingsUri)
   if (projectSettingsContent === undefined) {
+    log(`Skipping sync; project-settings.json not found for ${folderUri.fsPath}`)
     return
   }
+
+  log(`Syncing settings for ${folderUri.fsPath}`)
 
   try {
     const [settingsContent, { syncSettings }] = await Promise.all([
@@ -87,6 +113,7 @@ async function syncWorkspaceFolder(folderUri: vscode.Uri) {
     ])
     const result = syncSettings(settingsContent, projectSettingsContent)
     if (result === settingsContent) {
+      log(`No settings changes for ${folderUri.fsPath}`)
       return
     }
 
@@ -94,6 +121,7 @@ async function syncWorkspaceFolder(folderUri: vscode.Uri) {
       settingsUri,
       textEncoder.encode(result),
     )
+    log(`Updated ${settingsUri.fsPath}`)
   } catch (error) {
     showProjectSettingsError(error)
   }
@@ -108,13 +136,17 @@ async function removeSyncedSettingsFromWorkspaceFolder(folderUri: vscode.Uri) {
 
   const settingsContent = await readTextFile(settingsUri)
   if (settingsContent === undefined) {
+    log(`Skipping managed settings removal; settings.json not found for ${folderUri.fsPath}`)
     return
   }
+
+  log(`Removing managed settings for ${folderUri.fsPath}`)
 
   try {
     const { removeSyncedSettings } = await loadSyncModule()
     const result = removeSyncedSettings(settingsContent)
     if (result === settingsContent) {
+      log(`No managed settings to remove for ${folderUri.fsPath}`)
       return
     }
 
@@ -122,6 +154,7 @@ async function removeSyncedSettingsFromWorkspaceFolder(folderUri: vscode.Uri) {
       settingsUri,
       textEncoder.encode(result),
     )
+    log(`Removed managed settings from ${settingsUri.fsPath}`)
   } catch (error) {
     showProjectSettingsError(error)
   }
@@ -137,12 +170,14 @@ function createWatcherManager(): vscode.Disposable & { refresh(): void } {
     for (const folder of folders) {
       const folderKey = folder.uri.toString()
       if (!watchers.has(folderKey)) {
+        log(`Creating watcher for ${folder.uri.fsPath}`)
         watchers.set(folderKey, createWatcher(folder))
       }
     }
 
     for (const [folderKey, watcher] of watchers) {
       if (!activeFolderUris.has(folderKey)) {
+        log(`Disposing watcher for ${folderKey}`)
         watcher.dispose()
         watchers.delete(folderKey)
       }
@@ -169,9 +204,18 @@ function createWatcher(folder: vscode.WorkspaceFolder): vscode.Disposable {
   )
 
   disposables.push(watcher)
-  watcher.onDidChange((uri) => void syncForFile(uri), undefined, disposables)
-  watcher.onDidCreate((uri) => void syncForFile(uri), undefined, disposables)
-  watcher.onDidDelete((uri) => void removeSyncForFile(uri), undefined, disposables)
+  watcher.onDidChange((uri) => {
+    log(`Detected change: ${uri.fsPath}`)
+    void syncForFile(uri)
+  }, undefined, disposables)
+  watcher.onDidCreate((uri) => {
+    log(`Detected creation: ${uri.fsPath}`)
+    void syncForFile(uri)
+  }, undefined, disposables)
+  watcher.onDidDelete((uri) => {
+    log(`Detected deletion: ${uri.fsPath}`)
+    void removeSyncForFile(uri)
+  }, undefined, disposables)
 
   return {
     dispose() {
@@ -205,6 +249,11 @@ async function readTextFile(uri: vscode.Uri, fallback?: string) {
 
 function showProjectSettingsError(error: unknown) {
   if (error instanceof Error) {
+    log(`Error: ${error.message}`)
     vscode.window.showErrorMessage(`Project Settings: ${error.message}`)
   }
+}
+
+function log(message: string) {
+  outputChannel?.appendLine(`[${new Date().toISOString()}] ${message}`)
 }
