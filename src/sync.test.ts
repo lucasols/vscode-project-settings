@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { syncSettings } from './sync'
+import { removeSyncedSettings, syncSettings } from './sync'
 
 const MARKER_VALUE =
   '---- Managed by project-settings (do not edit below) ----'
@@ -220,5 +220,59 @@ describe('syncSettings', () => {
     const syncedText = syncedLines.join('\n')
     expect(syncedText).not.toContain('"editor.tabSize"')
     expect(syncedText).not.toContain('"editor.wordWrap"')
+  })
+})
+
+describe('removeSyncedSettings', () => {
+  it('returns the original content when no marker exists', () => {
+    const settings = '{\n  "editor.fontSize": 14\n}\n'
+    expect(removeSyncedSettings(settings)).toBe(settings)
+  })
+
+  it('removes the managed section and preserves user settings', () => {
+    const settings = [
+      '{',
+      '  "editor.fontSize": 14,',
+      '',
+      `  "----": "${MARKER_VALUE}",`,
+      '  "editor.tabSize": 2',
+      '}',
+      '',
+    ].join('\n')
+
+    expect(removeSyncedSettings(settings)).toBe(
+      ['{', '  "editor.fontSize": 14', '}', ''].join('\n'),
+    )
+  })
+
+  it('removes the managed section when it is the only content', () => {
+    const settings = [
+      '{',
+      `  "----": "${MARKER_VALUE}",`,
+      '  "editor.tabSize": 2',
+      '}',
+      '',
+    ].join('\n')
+
+    expect(removeSyncedSettings(settings)).toBe(['{', '}', ''].join('\n'))
+  })
+
+  it('preserves comments before the managed section', () => {
+    const settings = [
+      '{',
+      '  "editor.fontSize": 14,',
+      '  // keep this comment',
+      '',
+      `  "----": "${MARKER_VALUE}",`,
+      '  "editor.tabSize": 2',
+      '}',
+      '',
+    ].join('\n')
+
+    expect(removeSyncedSettings(settings)).toBe(
+      ['{', '  "editor.fontSize": 14', '  // keep this comment', '}', ''].join(
+        '\n',
+      ),
+    )
   })
 })

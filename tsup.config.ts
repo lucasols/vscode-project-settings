@@ -7,7 +7,6 @@ export default defineConfig({
   splitting: true,
   external: ['vscode'],
   noExternal: ['jsonc-parser'],
-  sourcemap: true,
   esbuildOptions(options) {
     options.mangleProps = /[^_]_$/
   },

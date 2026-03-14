@@ -31,6 +31,24 @@ function findMarkerIndex(children: Node[]): number {
   return children.findIndex((prop) => getPropertyKey(prop) === MARKER_KEY)
 }
 
+function parseSettingsTree(settingsContent: string): Node {
+  const tree = parseTree(settingsContent, undefined, {
+    allowTrailingComma: true,
+  })
+  if (!tree || tree.type !== 'object') {
+    throw new Error('settings.json must be a JSON object')
+  }
+  return tree
+}
+
+function removeFirstComma(text: string): string {
+  const commaIndex = text.indexOf(',')
+  if (commaIndex < 0) {
+    return text
+  }
+  return text.slice(0, commaIndex) + text.slice(commaIndex + 1)
+}
+
 function formatJsonValue(value: unknown, indent: string): string {
   const json = JSON.stringify(value, null, 2)
   return json.split('\n').join(`\n${indent}`)
@@ -79,13 +97,7 @@ export function syncSettings(
     return `{\n${syncedSection}\n}\n`
   }
 
-  const tree = parseTree(settingsContent, undefined, {
-    allowTrailingComma: true,
-  })
-  if (!tree || tree.type !== 'object') {
-    throw new Error('settings.json must be a JSON object')
-  }
-
+  const tree = parseSettingsTree(settingsContent)
   const children = tree.children ?? []
   const markerIndex = findMarkerIndex(children)
 
@@ -117,4 +129,40 @@ export function syncSettings(
   const comma = needsComma ? ',' : ''
 
   return `${trimmed}${comma}\n\n${syncedSection}\n}\n`
+}
+
+export function removeSyncedSettings(settingsContent: string): string {
+  if (!settingsContent.trim()) {
+    return settingsContent
+  }
+
+  const tree = parseSettingsTree(settingsContent)
+  const children = tree.children ?? []
+  const markerIndex = findMarkerIndex(children)
+
+  if (markerIndex < 0) {
+    return settingsContent
+  }
+
+  const markerNode = children[markerIndex]
+  if (!markerNode) {
+    throw new Error('Unexpected: marker node not found')
+  }
+
+  if (markerIndex === 0) {
+    return `${settingsContent.slice(0, markerNode.offset).trimEnd()}\n}\n`
+  }
+
+  const previousNode = children[markerIndex - 1]
+  if (!previousNode) {
+    throw new Error('Unexpected: previous node not found')
+  }
+
+  const prefix = settingsContent.slice(0, previousNode.offset + previousNode.length)
+  const separator = settingsContent.slice(
+    previousNode.offset + previousNode.length,
+    markerNode.offset,
+  )
+
+  return `${prefix}${removeFirstComma(separator).trimEnd()}\n}\n`
 }
