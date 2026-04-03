@@ -14,7 +14,8 @@
     "dev": "tsup --watch --minify --dts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "install-extension": "code --install-extension $(ls -t project-settings-*.vsix | head -n 1)"
+    "install-extension": "code --install-extension $(ls -t project-settings-*.vsix | head -n 1)",
+    "build-and-install": "pnpm build && pnpm install-extension"
   },
   "keywords": [
     "settings",
